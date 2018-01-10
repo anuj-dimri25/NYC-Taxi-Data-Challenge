@@ -1,0 +1,52 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+## Loading libraries
+```{r}
+library('ggplot2')
+library('tibble')
+library('dplyr')
+library('data.table')
+library('lubridate')
+library('leaflet')
+```
+
+## Input data
+```{r}
+train<-as_tibble(fread('nyc_data/train.csv'))
+test<-as_tibble(fread('nyc_data/test.csv'))
+
+summary(train)
+```
+
+## Changing some features into factor form and making consistent date time formats
+```{r}
+train<-train %>% mutate(pickup_datetime=ymd_hms(pickup_datetime), dropoff_datetime=ymd_hms(dropoff_datetime), vendor_id=factor(vendor_id), passenger_count=factor(passenger_count))
+
+```
+
+## Subset of  pickup points on map
+```{r}
+#train$pickup_latitude=as.numeric(as.character(train$pickup_latitude))
+#train$pickup_longitude=as.numeric(as.character(train$pickup_longitude))
+mymap<-leaflet(data=sample_n(train,5000))
+mymap<-addTiles(mymap)
+mymap<- addCircleMarkers(mymap, ~ pickup_longitude, ~ pickup_latitude, radius=1, color='red')
+mymap
+```
+
+```{r}
+
+```
+
+
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file).
