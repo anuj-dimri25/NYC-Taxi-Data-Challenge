@@ -1,6 +1,7 @@
 ---
 title: "R Notebook"
-output: html_notebook
+output: github_document
+ 
 ---
 
 This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
@@ -42,10 +43,34 @@ mymap
 ```
 
 ```{r}
+  ggplot(train,aes(train$trip_duration)) +
+  geom_histogram(fill = "red",binwidth =25)
+ 
+```
+
+## Visualizing very less number of trips in end of January
+```{r}
+train %>% filter(pickup_datetime>ymd("2016-01-20") & pickup_datetime<ymd("2016-02-10")) %>% ggplot(aes(pickup_datetime))+geom_histogram(fill="blue",bins=100)
 
 ```
 
+## Grouping by passenger count
 
+```{r}
+train %>% group_by(passenger_count) %>% count() %>% ggplot(aes(passenger_count,n,fill=passenger_count))+geom_col()
+```
+
+## Number of trips by day of week
+
+```{r}
+train %>% group_by(ww=wday(pickup_datetime)) %>% count() %>% ggplot(aes(ww,n))+geom_point(size=3) + labs(x="Day of week", y="Number of pickups")  
+```
+
+## Number of pickups by hour of day
+
+```{r}
+train %>% group_by(hh=hour(pickup_datetime),vendor_id) %>% count() %>% ggplot(aes(hh,n,color=vendor_id))+geom_point(size=3)+labs(x="Hour of day", y="Number of pickups")  
+```
 
 Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
 
