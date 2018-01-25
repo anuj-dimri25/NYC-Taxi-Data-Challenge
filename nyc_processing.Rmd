@@ -31,6 +31,8 @@ summary(train)
 ```{r}
 train<-train %>% mutate(pickup_datetime=ymd_hms(pickup_datetime), dropoff_datetime=ymd_hms(dropoff_datetime), vendor_id=factor(vendor_id), passenger_count=factor(passenger_count))
 
+
+
 ```
 
 ## Subset of  pickup points on map
@@ -51,7 +53,7 @@ mymap
 
 ## Visualizing very less number of trips in end of January
 ```{r}
-train %>% filter(pickup_datetime>ymd("2016-01-20") & pickup_datetime<ymd("2016-02-10")) %>% ggplot(aes(pickup_datetime))+geom_histogram(fill="blue",bins=100)
+train %>% filter(pickup_datetime>ymd("2016-01-20") & pickup_datetime<ymd("2016-02-10")) %>% ggplot(aes(pickup_datetime))+geom_histogram(fill="blue",bins=200)
 
 ```
 
@@ -127,7 +129,121 @@ train<- train %>% mutate(wday=wday(pickup_datetime, label = TRUE),
 train %>% group_by(wday,hour) %>% summarise(median_spd=median(speed)) %>% ggplot(aes(wday,hour,fill=median_spd))+geom_tile()+ scale_fill_distiller(palette = "Spectral") 
 ```
 
+## Correlation plot
+```{r}
+library('corrplot')
+train %>% 
+  select(-id, -pickup_datetime, -dropoff_datetime) %>% 
+  mutate(passenger_count=as.integer(passenger_count),
+         vendor_id=as.integer(vendor_id),
+         store_and_fwd_flag=as.integer(as.factor(store_and_fwd_flag)),
+         wday=as.integer(wday)) %>%
+         select(trip_duration,speed,everything()) %>%
+         cor(use="complete.obs",method="spearman") %>%
+  corrplot(type="lower",method="circle",diag=FALSE)
 
+         
+```
+
+## Trip duration histogram
+
+```{r}
+train %>% filter(trip_duration>20 & trip_duration<3000) %>% ggplot(aes(trip_duration)) + geom_histogram(fill="red",bins=300)
+```
+
+
+```{r}
+train <- train %>% 
+  select(-id, -pickup_datetime, -dropoff_datetime) %>% 
+  mutate(passenger_count=as.integer(passenger_count),
+         vendor_id=as.integer(vendor_id),
+         store_and_fwd_flag=as.integer(as.factor(store_and_fwd_flag)),
+         wday=as.integer(wday))
+glimpse(train)
+```
+
+
+```{r}
+library(lubridate)
+test<-as_tibble(fread('nyc_data/test.csv'))
+test<-test %>% mutate(pickup_datetime=ymd_hms(pickup_datetime), vendor_id=factor(vendor_id), passenger_count=factor(passenger_count))
+
+
+test<-test %>% select(-id) %>% 
+  mutate(passenger_count=as.integer(passenger_count),
+         vendor_id=as.integer(vendor_id),
+         store_and_fwd_flag=as.integer(as.factor(store_and_fwd_flag)),
+         wday=as.integer(wday(pickup_datetime)),
+         hour=hour(pickup_datetime))
+
+test<-test %>% select(-pickup_datetime)
+
+glimpse(test)
+```
+
+
+
+## Using XGBoost for prediction
+
+```{r}
+library('xgboost')
+library('caret')
+train <- train %>%
+  mutate(trip_duration = log(trip_duration + 1))
+
+set.seed(7007)
+splitIndex<-createDataPartition(train$trip_duration,p=0.7,list=FALSE,times=1)
+
+## splitting into train and validation set
+train1<-train[splitIndex,]
+valid1<-train[-splitIndex,]
+
+train10<-train1 %>% select(-trip_duration)
+valid10<-valid1 %>% select(-trip_duration)
+
+dtrain<-xgb.DMatrix(as.matrix(train10),label=train1$trip_duration)
+dvalid<-xgb.DMatrix(as.matrix(valid10),label=valid1$trip_duration)
+
+#test<-test %>% select(-id) %>% 
+#  mutate(passenger_count=as.integer(passenger_count),
+#         vendor_id=as.integer(vendor_id),
+#         store_and_fwd_flag=as.integer(as.factor(store_and_fwd_flag)),
+#         wday=as.integer(wday(pickup_datetime)),
+#         hour=hour(pickup_datetime))
+
+#glimpse(test)
+dtest<-xgb.DMatrix(as.matrix(test))
+```
+
+## Setting XGBoost parameters
+
+```{r}
+xgboost_params<-list(colsample_bytree=0.7, subsample=0.7, booster="gbtree", max_depth=5, eta=0.3, eval_metric="rmse", objective="reg:linear", seed=7007)
+
+watchlist<-list(train=dtrain,valid=dvalid)
+```
+
+
+## Training xgboost
+```{r}
+set.seed(7007)
+xgboost_train<-xgb.train(params=xgboost_params, data=dtrain, print_every_n = 10, watchlist = watchlist,nrounds=100)
+
+
+```
+
+## Using cross-validation
+```{r}
+xgboost_crossval<-xgb.cv(xgboost_params,dtrain,early_stopping_rounds = 15, nfold=5, nrounds=100)
+```
+
+## Feature Importance Plot
+
+```{r}
+important<-as.tibble(xgb.importance(feature_names=colnames(train %>% select(-trip_duration)),model=xgboost_train))
+
+important %>% ggplot(aes(reorder(Feature, Gain, FUN=max),Gain,fill=Feature))+geom_col()+coord_flip()
+```
 
 Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
 
